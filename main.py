@@ -1,16 +1,22 @@
+# main.py
+
 from keep_alive import keep_alive
 from telethon import TelegramClient, events
 from telethon.tl.functions.channels import JoinChannelRequest
 import re
 import os
 import asyncio
-import logging
 from dotenv import load_dotenv
+import logging
 
+# Keep-alive ping server
 keep_alive()
+
+# Setup logs
 logging.basicConfig(level=logging.INFO)
 print("⚙️ Starting bot setup...")
 
+# Load .env config
 load_dotenv()
 api_id = int(os.getenv("API_ID"))
 api_hash = os.getenv("API_HASH")
@@ -19,7 +25,7 @@ target_channel = os.getenv("TARGET_CHANNEL")
 
 print(f"✅ Env Loaded: API_ID={api_id}, Phone={phone_number}, Channel={target_channel}")
 
-# Channels to join and monitor
+# List of source channels
 source_channels = [
     "BinanceRedPacket_Hub",
     "thxbox",
@@ -54,7 +60,7 @@ async def main():
         code = input("📨 Enter the login code you received: ")
         await client.sign_in(phone_number, code)
 
-    # Join each channel (auto)
+    # Auto join all red packet channels
     for channel in source_channels:
         try:
             await client(JoinChannelRequest(channel))
@@ -64,9 +70,8 @@ async def main():
 
     @client.on(events.NewMessage())
     async def handler(event):
-        sender = await event.get_sender()
         chat = await event.get_chat()
-        logging.info(f"🔔 Message from: {getattr(chat, 'title', 'Unknown')} | {event.raw_text[:30]}...")
+        logging.info(f"🔔 Message from {getattr(chat, 'title', 'Unknown')}: {event.raw_text[:50]}...")
 
         message = event.raw_text
         matches = {
@@ -93,4 +98,5 @@ async def main():
 
     await client.run_until_disconnected()
 
+# Run the bot
 asyncio.run(main())
