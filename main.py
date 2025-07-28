@@ -64,7 +64,7 @@ if not client.is_user_authorized():
     print("❌ ERROR: Session not authorized. Run this bot locally once to login and save session.")
 else:
     import asyncio
-    asyncio.run(ma
+    asyncio.run(maim())
 from keep_alive import keep_alive
 keep_alive()
 
