@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from flask import Flask
 from threading import Thread
 
@@ -14,7 +13,6 @@ def run():
 def keep_alive():
     t = Thread(target=run)
     t.start()
-=======
 from flask import Flask
 from threading import Thread
 
@@ -30,4 +28,3 @@ def run():
 def keep_alive():
     t = Thread(target=run)
     t.start()
->>>>>>> 2ebab30 (✅ Added session, ready for Railway)
