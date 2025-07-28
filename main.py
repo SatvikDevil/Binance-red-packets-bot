@@ -7,12 +7,12 @@ import os
 import asyncio
 from dotenv import load_dotenv
 
-# Start web server to keep bot alive
+# Start Flask keep-alive server
 keep_alive()
 
 print("⚙️ Starting bot setup...")
 
-# Load environment variables
+# Load env vars
 load_dotenv()
 api_id = int(os.getenv("API_ID"))
 api_hash = os.getenv("API_HASH")
@@ -21,7 +21,7 @@ target_channel = os.getenv("TARGET_CHANNEL")
 
 print(f"✅ Env Loaded: API_ID={api_id}, Phone={phone_number}, Channel={target_channel}")
 
-# Source channels to monitor
+# Telegram channels to watch
 source_channels = [
     "BinanceRedPacket_Hub",
     "thxbox",
@@ -44,26 +44,23 @@ source_channels = [
     "BTC_Boxes5374"
 ]
 
-# Regex
+# Regex patterns
 code_regex = re.compile(r'(?:code|Code|CODE)[^\w]*(\w{5,})')
 url_regex = re.compile(r'(https:\/\/(?:www\.)?binance\.com\/en\/red-packet\/claim\?code=\w+|https:\/\/app\.binance\.com\/uni-qr\/cart\/\d+)', re.IGNORECASE)
 
-# Define async function
 async def main():
     client = TelegramClient("session", api_id, api_hash)
     await client.connect()
 
     if not await client.is_user_authorized():
-        await client.send_code_request(phone_number)
-        code = input("📨 Enter the login code you received: ")
-        await client.sign_in(phone_number, code)
-    
+        print("❌ Bot not authorized! You must run it **once locally** to sign in.")
+        return
+
     print("👀 Bot is watching red packet channels...")
 
     @client.on(events.NewMessage(chats=source_channels))
     async def handler(event):
         message = event.raw_text
-
         matches = {
             "codes": code_regex.findall(message),
             "urls": url_regex.findall(message),
@@ -73,22 +70,20 @@ async def main():
 
         if matches["codes"]:
             for code in matches["codes"]:
-                msg = f"""🧧 Red Packet Code: `{code}`  
-⏰ Claim FAST!"""
+                msg = f"🧧 Red Packet Code: `{code}`\n⏰ Claim FAST!"
                 await client.send_message(target_channel, msg)
                 posted = True
 
         if matches["urls"]:
             for url in matches["urls"]:
-                msg = f"""🎁 Claim Link:  
-{url}"""
+                msg = f"🎁 Claim Link:\n{url}"
                 await client.send_message(target_channel, msg)
                 posted = True
 
         if posted:
-            print("[+] Red packet posted.")
+            print("[+] Red packet posted!")
 
     await client.run_until_disconnected()
 
-# Run the bot
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
