@@ -49,15 +49,6 @@ url_regex = re.compile(r'(https:\/\/(?:www\.)?binance\.com\/en\/red-packet\/clai
 
 async def main():
     client = TelegramClient("session", api_id, api_hash)
-    await client.connect()
-
-    if not await client.is_user_authorized():
-        logger.warning("Not authorized. Sending code...")
-        await client.send_code_request(phone_number)
-        code = input("📨 Enter login code: ")
-        await client.sign_in(phone_number, code)
-
-    logger.info("✅ Connected and authorized.")
 
     @client.on(events.NewMessage(chats=source_channels))
     async def handler(event):
@@ -86,6 +77,8 @@ async def main():
         except Exception as e:
             logger.error(f"❌ Failed to send: {e}")
 
+    await client.start(phone=phone_number)
+    logger.info("✅ Client started and authorized.")
     await client.run_until_disconnected()
 
 asyncio.run(main())
