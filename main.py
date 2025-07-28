@@ -53,6 +53,7 @@ async def main():
     @client.on(events.NewMessage(chats=source_channels))
     async def handler(event):
         message = event.raw_text
+        logger.info(f"🔔 New message from {event.chat.username or event.chat_id}")
         matches = {
             "codes": code_regex.findall(message),
             "urls": url_regex.findall(message),
@@ -79,6 +80,9 @@ async def main():
 
     await client.start(phone=phone_number)
     logger.info("✅ Client started and authorized.")
-    await client.run_until_disconnected()
+
+    # ⏳ KEEP IT ALIVE!
+    while True:
+        await asyncio.sleep(100)
 
 asyncio.run(main())
