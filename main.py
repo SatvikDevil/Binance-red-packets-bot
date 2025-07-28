@@ -1,18 +1,16 @@
-# main.py
-
 from keep_alive import keep_alive
 from telethon import TelegramClient, events
+from telethon.tl.functions.channels import JoinChannelRequest
 import re
 import os
 import asyncio
+import logging
 from dotenv import load_dotenv
 
-# Start Flask keep-alive server
 keep_alive()
-
+logging.basicConfig(level=logging.INFO)
 print("⚙️ Starting bot setup...")
 
-# Load env vars
 load_dotenv()
 api_id = int(os.getenv("API_ID"))
 api_hash = os.getenv("API_HASH")
@@ -21,7 +19,7 @@ target_channel = os.getenv("TARGET_CHANNEL")
 
 print(f"✅ Env Loaded: API_ID={api_id}, Phone={phone_number}, Channel={target_channel}")
 
-# Telegram channels to watch
+# Channels to join and monitor
 source_channels = [
     "BinanceRedPacket_Hub",
     "thxbox",
@@ -44,7 +42,6 @@ source_channels = [
     "BTC_Boxes5374"
 ]
 
-# Regex patterns
 code_regex = re.compile(r'(?:code|Code|CODE)[^\w]*(\w{5,})')
 url_regex = re.compile(r'(https:\/\/(?:www\.)?binance\.com\/en\/red-packet\/claim\?code=\w+|https:\/\/app\.binance\.com\/uni-qr\/cart\/\d+)', re.IGNORECASE)
 
@@ -53,13 +50,24 @@ async def main():
     await client.connect()
 
     if not await client.is_user_authorized():
-        print("❌ Bot not authorized! You must run it **once locally** to sign in.")
-        return
+        await client.send_code_request(phone_number)
+        code = input("📨 Enter the login code you received: ")
+        await client.sign_in(phone_number, code)
 
-    print("👀 Bot is watching red packet channels...")
+    # Join each channel (auto)
+    for channel in source_channels:
+        try:
+            await client(JoinChannelRequest(channel))
+            logging.info(f"✅ Joined channel: {channel}")
+        except Exception as e:
+            logging.warning(f"❌ Failed to join {channel}: {e}")
 
-    @client.on(events.NewMessage(chats=source_channels))
+    @client.on(events.NewMessage())
     async def handler(event):
+        sender = await event.get_sender()
+        chat = await event.get_chat()
+        logging.info(f"🔔 Message from: {getattr(chat, 'title', 'Unknown')} | {event.raw_text[:30]}...")
+
         message = event.raw_text
         matches = {
             "codes": code_regex.findall(message),
@@ -81,9 +89,8 @@ async def main():
                 posted = True
 
         if posted:
-            print("[+] Red packet posted!")
+            logging.info("[+] Red packet posted to target channel.")
 
     await client.run_until_disconnected()
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
