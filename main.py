@@ -8,11 +8,11 @@ import asyncio
 from dotenv import load_dotenv
 import logging
 
-# Setup logging
+# Setup logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
-# Keep-alive server
+# Keep alive
 keep_alive()
 logger.info("⚙️ Starting bot setup...")
 
@@ -25,7 +25,7 @@ target_channel = os.getenv("TARGET_CHANNEL")
 
 logger.info(f"✅ Env Loaded: API_ID={api_id}, Phone={phone_number}, Channel={target_channel}")
 
-# Red packet source channels
+# List of monitored public channels
 source_channels = [
     "BinanceRedPacket_Hub",
     "thxbox",
@@ -48,9 +48,12 @@ source_channels = [
     "BTC_Boxes5374"
 ]
 
-# Updated Regex
-code_regex = re.compile(r'\b[A-Z0-9]{5,15}\b')  # Broad match for red packet codes
+# Regex: strict alphanumeric codes (5–12 chars), MUST contain a letter
+code_regex = re.compile(r'\b(?=\w*[A-Za-z])\w{5,12}\b')
 url_regex = re.compile(r'(https:\/\/(?:www\.)?binance\.com\/en\/red-packet\/claim\?code=\w+|https:\/\/app\.binance\.com\/uni-qr\/cart\/\w+)', re.IGNORECASE)
+
+# Cache to track sent codes/URLs
+sent_cache = set()
 
 async def main():
     client = TelegramClient("session", api_id, api_hash)
@@ -66,48 +69,36 @@ async def main():
 
     @client.on(events.NewMessage(chats=source_channels))
     async def handler(event):
-        # Read full message (text, caption, etc.)
-        msg_parts = [
-            event.message.message or '',
-            getattr(event.message, 'text', '') or '',
-            getattr(event.message, 'raw_text', '') or '',
-            getattr(event.message, 'caption', '') or ''
-        ]
-        message = '\n'.join([m for m in msg_parts if m])
-
+        message = event.raw_text.strip()
         logger.info(f"🔔 New message from {event.chat.title}")
-        logger.info(f"📩 Content: {message.strip()}")
 
-        matches = {
-            "codes": code_regex.findall(message),
-            "urls": url_regex.findall(message),
-        }
+        codes = [code for code in code_regex.findall(message) if code not in sent_cache]
+        urls = [url for url in url_regex.findall(message) if url not in sent_cache]
 
-        logger.info(f"🎯 Matches: {matches}")
-
-        count = 0
         try:
             channel_entity = await client.get_entity(target_channel)
+            sent = 0
 
-            for code in matches["codes"]:
+            for code in codes:
                 msg = f"🧧 Red Packet Code: `{code}`\n⏰ Claim FAST!"
                 await client.send_message(channel_entity, msg)
-                count += 1
+                sent_cache.add(code)
+                sent += 1
 
-            for url in matches["urls"]:
+            for url in urls:
                 msg = f"🎁 Claim Link:\n{url}"
                 await client.send_message(channel_entity, msg)
-                count += 1
+                sent_cache.add(url)
+                sent += 1
 
-            if count > 0:
-                logger.info(f"[+] 🔥 {count} red packets posted to {target_channel}")
+            if sent > 0:
+                logger.info(f"[+] ✅ Sent {sent} red packets to {target_channel}")
             else:
-                logger.info("❌ No matching red packet content to send.")
+                logger.info("❌ No new codes or links to send.")
 
         except Exception as e:
-            logger.error(f"❌ Failed to send red packet: {e}")
+            logger.error(f"❌ Failed to send message: {e}")
 
     await client.run_until_disconnected()
 
-# Start bot
 asyncio.run(main())
