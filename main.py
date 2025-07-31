@@ -1,77 +1,74 @@
 # main.py
 
-from keep_alive import keep_alive
-from telethon import TelegramClient, events
-from telegram import Bot
-from telegram.error import TelegramError
-import re
 import os
-import asyncio
+import re
 from dotenv import load_dotenv
+from flask import Flask
+from threading import Thread
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 import logging
 
+# Load env variables
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+TARGET_CHANNEL = os.getenv("TARGET_CHANNEL")  # e.g., "@binanceredpackethustle"
+
+# Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
-# 🌐 Keep app alive on Railway
-keep_alive()
+# Start Flask keep-alive server
+app = Flask("")
 
-# ✅ Load environment
-load_dotenv()
-api_id = int(os.getenv("API_ID"))
-api_hash = os.getenv("API_HASH")
-bot_token = os.getenv("BOT_TOKEN")
-target_channel = os.getenv("TARGET_CHANNEL")
+@app.route('/')
+def home():
+    return "I'm alive!"
 
-# ✅ Start Bot
-bot = Bot(token=bot_token)
+def run():
+    app.run(host='0.0.0.0', port=8080)
 
-# 🔍 Channels to monitor
-source_channels = [
-    "BinanceRedPacket_Hub", "thxbox", "redpackcs", "binancewordo", "binancecodez",
-    "BOXS_BD", "binanceredpacketcodes17", "binanceredpacketcoddes", "RMCryptoEarn",
-    "jidaocaijing", "red_packet_king", "redboxyt1", "CMXboxes", "MoonCrypto001",
-    "WebKingBox", "mousecrypto2", "DailyEarn00007", "techearncrypto29", "BTC_Boxes5374"
-]
+def keep_alive():
+    Thread(target=run).start()
 
-# 🔎 Regex filters
-code_regex = re.compile(r'\b([A-Z0-9]{8,})\b')
+# Filters
+code_regex = re.compile(r'\b[A-Z0-9]{6,12}\b')
 url_regex = re.compile(r'(https:\/\/(?:www\.)?binance\.com\/en\/red-packet\/claim\?code=\w+|https:\/\/app\.binance\.com\/uni-qr\/cart\/\w+)', re.IGNORECASE)
 
-sent_codes = set()
+# Message Handler
+async def red_packet_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text or ""
+    codes = code_regex.findall(text)
+    urls = url_regex.findall(text)
+    sent = False
 
-async def main():
-    client = TelegramClient("session", api_id, api_hash)
-    await client.start()
-    logger.info("✅ Client started and authorized.")
-
-    @client.on(events.NewMessage(chats=source_channels))
-    async def handler(event):
-        message = event.raw_text
-        logger.info(f"📥 New message from {event.chat.username or 'unknown'}")
-        
-        codes = code_regex.findall(message)
-        urls = url_regex.findall(message)
-
+    if codes:
         for code in codes:
-            if code.lower() not in sent_codes and code.lower() not in ["binance", "packet", "crypto", "provided", "redpackethub", "ready"]:
+            if code.lower() not in ['binance', 'packet', 'crypto', 'provided', 'redpackethub', 'ready']:  # Filter junk
                 msg = f"🧧 Red Packet Code: `{code}`\n⏰ Claim FAST!"
-                try:
-                    await bot.send_message(chat_id=target_channel, text=msg, parse_mode="Markdown")
-                    sent_codes.add(code.lower())
-                    logger.info(f"[+] Sent code: {code}")
-                except TelegramError as e:
-                    logger.error(f"❌ Failed to send code: {e}")
+                await context.bot.send_message(chat_id=TARGET_CHANNEL, text=msg, parse_mode='Markdown')
+                sent = True
 
+    if urls:
         for url in urls:
-            if url not in sent_codes:
-                try:
-                    await bot.send_message(chat_id=target_channel, text=f"🎁 Claim Link:\n{url}")
-                    sent_codes.add(url)
-                    logger.info(f"[+] Sent link: {url}")
-                except TelegramError as e:
-                    logger.error(f"❌ Failed to send URL: {e}")
+            msg = f"🎁 Claim Link:\n{url}"
+            await context.bot.send_message(chat_id=TARGET_CHANNEL, text=msg)
+            sent = True
 
-    await client.run_until_disconnected()
+    if sent:
+        logger.info("[+] Sent red packet to channel.")
 
-asyncio.run(main())
+# Run Bot
+async def run_bot():
+    app_bot = ApplicationBuilder().token(BOT_TOKEN).build()
+    app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, red_packet_handler))
+    await app_bot.start()
+    logger.info("✅ Bot is up and watching.")
+    await app_bot.updater.start_polling()
+    await app_bot.updater.idle()
+
+# Main
+if __name__ == "__main__":
+    keep_alive()
+    import asyncio
+    asyncio.run(run_bot())
