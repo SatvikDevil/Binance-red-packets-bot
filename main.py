@@ -6,20 +6,20 @@ from dotenv import load_dotenv
 from flask import Flask
 from threading import Thread
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 import logging
 
-# Load env variables
+# Load environment variables
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-TARGET_CHANNEL = os.getenv("TARGET_CHANNEL")  # e.g., "@binanceredpackethustle"
+TARGET_CHANNEL = os.getenv("TARGET_CHANNEL")
 
-# Logging
+# Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
-# Start Flask keep-alive server
-app = Flask("")
+# Keep-alive server
+app = Flask('')
 
 @app.route('/')
 def home():
@@ -31,44 +31,40 @@ def run():
 def keep_alive():
     Thread(target=run).start()
 
-# Filters
+# Regex filters
 code_regex = re.compile(r'\b[A-Z0-9]{6,12}\b')
 url_regex = re.compile(r'(https:\/\/(?:www\.)?binance\.com\/en\/red-packet\/claim\?code=\w+|https:\/\/app\.binance\.com\/uni-qr\/cart\/\w+)', re.IGNORECASE)
+blocklist = ['binance', 'packet', 'crypto', 'provided', 'redpackethub', 'ready']
 
-# Message Handler
+# Handler
 async def red_packet_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text or ""
-    codes = code_regex.findall(text)
-    urls = url_regex.findall(text)
+    message = update.message.text or ""
+    codes = code_regex.findall(message)
+    urls = url_regex.findall(message)
     sent = False
 
-    if codes:
-        for code in codes:
-            if code.lower() not in ['binance', 'packet', 'crypto', 'provided', 'redpackethub', 'ready']:  # Filter junk
-                msg = f"🧧 Red Packet Code: `{code}`\n⏰ Claim FAST!"
-                await context.bot.send_message(chat_id=TARGET_CHANNEL, text=msg, parse_mode='Markdown')
-                sent = True
-
-    if urls:
-        for url in urls:
-            msg = f"🎁 Claim Link:\n{url}"
-            await context.bot.send_message(chat_id=TARGET_CHANNEL, text=msg)
+    for code in codes:
+        if code.lower() not in [w.lower() for w in blocklist]:
+            msg = f"🧧 Red Packet Code: `{code}`\n⏰ Claim FAST!"
+            await context.bot.send_message(chat_id=TARGET_CHANNEL, text=msg, parse_mode="Markdown")
             sent = True
+
+    for url in urls:
+        msg = f"🎁 Claim Link:\n{url}"
+        await context.bot.send_message(chat_id=TARGET_CHANNEL, text=msg)
+        sent = True
 
     if sent:
         logger.info("[+] Sent red packet to channel.")
 
-# Run Bot
-async def run_bot():
-    app_bot = ApplicationBuilder().token(BOT_TOKEN).build()
-    app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, red_packet_handler))
-    await app_bot.start()
-    logger.info("✅ Bot is up and watching.")
-    await app_bot.updater.start_polling()
-    await app_bot.updater.idle()
-
-# Main
+# MAIN
 if __name__ == "__main__":
     keep_alive()
-    import asyncio
-    asyncio.run(run_bot())
+
+    from telegram.ext import Application
+
+    app_bot = ApplicationBuilder().token(BOT_TOKEN).build()
+    app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, red_packet_handler))
+
+    logger.info("✅ Bot is starting...")
+    app_bot.run_polling()
